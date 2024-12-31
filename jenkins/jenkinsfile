@@ -1,0 +1,60 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'Git_Branch', defaultValue: 'main', description: 'Git branch to checkout')
+    }
+
+    environment {
+        IMAGE_NAME = 'flask-app'
+        AWS_ACCOUNT_ID = '<your-aws-account-id>' // Replace with your AWS Account ID
+        AWS_REGION = 'us-east-1' // Replace with your desired AWS region
+        ECR_REPOSITORY = 'flask-app' // Replace with your ECR repository name
+        REGISTRY_URL = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        BUILD_NUMBER_TAG = "${BUILD_NUMBER}"
+        KUBECONFIG_CREDENTIALS = 'KUBE_CONFIG' // Jenkins Kubernetes config credentials ID
+    }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                script {
+                    sh """
+                        echo "Cloning public repository with branch: ${params.Git_Branch}"
+                        git clone --branch ${params.Git_Branch} https://github.com/jeevasendrayan/assessment.git
+                    """
+                }
+            }
+        }
+        
+        stage('Build and Push Docker Image to ECR') {
+             steps {
+                 script {
+                     sh """
+                         echo "Building Docker image..."
+                         docker build -t ${REGISTRY_URL}/${IMAGE_NAME}:${BUILD_NUMBER_TAG} .
+                         echo "Pushing Docker image to AWS ECR..."
+                         docker push ${REGISTRY_URL}/${IMAGE_NAME}:${BUILD_NUMBER_TAG}
+                     """
+                 }
+             }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    withCredentials([file(credentialsId: KUBECONFIG_CREDENTIALS, variable: 'KUBECONFIG_FILE')]) {
+                        sh """
+                            echo "Using Kubernetes configuration..."
+                            export KUBECONFIG=${KUBECONFIG_FILE}
+                            echo "Deploying application to Kubernetes..."
+                            kubectl apply -f kubernetes/flask-app-deployment.yaml
+                            kubectl apply -f kubernetes/flask-app-hpa.yaml
+                            kubectl set image deployment/flask-app flask-app-container=${REGISTRY_URL}/${IMAGE_NAME}:${BUILD_NUMBER_TAG}
+                        """
+                    }
+                }
+            }
+        }
+    }
+}
