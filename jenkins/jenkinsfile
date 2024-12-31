@@ -7,9 +7,9 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'flask-app'
-        AWS_ACCOUNT_ID = '<your-aws-account-id>' // Replace with your AWS Account ID
-        AWS_REGION = 'us-east-1' // Replace with your desired AWS region
-        ECR_REPOSITORY = 'flask-app' // Replace with your ECR repository name
+        AWS_ACCOUNT_ID = '<AWS_ACCOUNT_ID>' // Replace with  AWS Account ID
+        AWS_REGION = 'us-east-1' // Replace with desired AWS region
+        ECR_REPOSITORY = 'flask-app' // Replace with ECR repository name
         REGISTRY_URL = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         BUILD_NUMBER_TAG = "${BUILD_NUMBER}"
         KUBECONFIG_CREDENTIALS = 'KUBE_CONFIG' // Jenkins Kubernetes config credentials ID
@@ -19,35 +19,45 @@ pipeline {
         stage('Clone Repository') {
             steps {
                 script {
+                    echo "Cloning public repository with branch: ${params.Git_Branch}"
                     sh """
-                        echo "Cloning public repository with branch: ${params.Git_Branch}"
                         git clone --branch ${params.Git_Branch} https://github.com/jeevasendrayan/assessment.git
                     """
                 }
             }
         }
         
-        stage('Build and Push Docker Image to ECR') {
-             steps {
-                 script {
-                     sh """
-                         echo "Building Docker image..."
-                         docker build -t ${REGISTRY_URL}/${IMAGE_NAME}:${BUILD_NUMBER_TAG} .
-                         echo "Pushing Docker image to AWS ECR..."
-                         docker push ${REGISTRY_URL}/${IMAGE_NAME}:${BUILD_NUMBER_TAG}
-                     """
-                 }
-             }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // Build the Docker image using the Jenkins workspace directory
+                    echo "Building Docker image in the workspace: ${WORKSPACE}"
+                    sh """
+                        docker build -f ${WORKSPACE}/assessment/Dockerfile -t ${REGISTRY_URL}/${IMAGE_NAME}:${BUILD_NUMBER_TAG} ${WORKSPACE}
+                    """
+                }
+            }
+        }
+
+        stage('Push Docker Image to ECR') {
+            steps {
+                script {
+                    echo "Pushing Docker image to AWS ECR..."
+                    sh """
+                        docker push ${REGISTRY_URL}/${IMAGE_NAME}:${BUILD_NUMBER_TAG}
+                    """
+                }
+            }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
                 script {
                     withCredentials([file(credentialsId: KUBECONFIG_CREDENTIALS, variable: 'KUBECONFIG_FILE')]) {
+                        echo "Using Kubernetes configuration..."
+                        export KUBECONFIG=${KUBECONFIG_FILE}
+                        echo "Deploying application to Kubernetes..."
                         sh """
-                            echo "Using Kubernetes configuration..."
-                            export KUBECONFIG=${KUBECONFIG_FILE}
-                            echo "Deploying application to Kubernetes..."
                             kubectl apply -f kubernetes/flask-app-deployment.yaml
                             kubectl apply -f kubernetes/flask-app-hpa.yaml
                             kubectl set image deployment/flask-app flask-app-container=${REGISTRY_URL}/${IMAGE_NAME}:${BUILD_NUMBER_TAG}
