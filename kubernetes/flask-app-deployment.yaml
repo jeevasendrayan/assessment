@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: flask-app
-        image: flask-app:latest  # Ensure this matches the image you built
+        image: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/flask-app:${BUILD_NUMBER_TAG}
         ports:
         - containerPort: 8080
 ---
