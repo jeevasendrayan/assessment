@@ -5,7 +5,7 @@ FROM python:3.7-slim
 WORKDIR /app
 
 # Copy the Python script into the container
-COPY app.py .
+COPY assessment/app.py .
 
 # Install Flask, which is required by the script
 RUN pip install Flask
