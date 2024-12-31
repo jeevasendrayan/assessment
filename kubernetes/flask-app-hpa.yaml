@@ -1,21 +1,21 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: netpulse-tee-hpa
+  name: flask-app-hpa  # Name of the HPA
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: flask-app
-  minReplicas: 3
-  maxReplicas: 5
+    name: flask-app  # The name of your deployment
+  minReplicas: 3  # Minimum number of replicas
+  maxReplicas: 5  # Maximum number of replicas
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 50
+        averageUtilization: 50  # Target CPU utilization for scaling
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 15
